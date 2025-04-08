@@ -21,7 +21,7 @@
 
 1. 克隆项目到本地：
 ```bash
-git clone [您的仓库地址]
+git clone https://github.com/RammusLeo/gift_recommender.git
 ```
 
 2. 安装依赖：
