@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>礼物小助手 - 付款界面</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+  <style>
+    body { 
+      margin: 0; 
+      padding: 0; 
+      font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    }
+    #sketch-container { 
+      display: none; 
+      margin: 0 auto;
+      max-width: 400px;
+    }
+    #sketch-container.active { 
+      display: block; 
+    }
+    #loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.8);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 5px solid #f3f3f3;
+      border-top: 5px solid #ff69b4;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div id="loading"><div class="spinner"></div></div>
+  <div id="sketch-container"></div>
+  
+  <script>
+    // 全局变量
+    let currentPage = 1; // 1=收货信息, 2=支付方式, 3=密码输入, 4=支付完成
+    let currentField = null;
+    let userInfo = { name: "", phone: "", address: "" };
+    let paymentMethods = [
+      { name: "微信支付", icon: "💳", desc: "推荐微信用户使用", selected: true, color: [76, 175, 80] },
+      { name: "支付宝", icon: "💰", desc: "快速安全支付", selected: false, color: [66, 165, 245] },
+      { name: "信用卡", icon: "🛒", desc: "支持Visa/Master", selected: false, color: [255, 152, 0] },
+      { name: "花呗分期", icon: "🌺", desc: "可分3/6/12期", selected: false, color: [236, 64, 122] },
+      { name: "白条支付", icon: "📝", desc: "30天免息", selected: false, color: [103, 58, 183] }
+    ];
+    let password = "";
+    let digits = ["", "", "", "", "", ""];
+    let paymentSuccess = false;
+    let successStartFrame = 0;
+    let selectedMethod = "微信支付";
+    let orderNumber = "GD" + Math.floor(Math.random() * 1000000000).toString().padStart(9, '0');
+
+    // 获取选中的礼物价格
+    const selectedGiftPrice = localStorage.getItem('selectedGiftPrice');
+    let giftPrice = selectedGiftPrice ? parseFloat(selectedGiftPrice) : 0.00;
+
+    function setup() {
+      let canvas = createCanvas(400, 700);
+      canvas.parent('sketch-container');
+      showPage(1); // 默认显示第一页
+      
+      // 隐藏加载动画
+      setTimeout(() => {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('sketch-container').classList.add('active');
+      }, 1000);
+    }
+
+    function draw() {
+      background(255, 245, 250); // 更柔和的粉色背景
+      
+      // 绘制顶部装饰条
+      drawHeader();
+      
+      if (currentPage === 1) {
+        drawShippingInfoPage();
+      } else if (currentPage === 2) {
+        drawPaymentMethodPage();
+      } else if (currentPage === 3) {
+        drawPasswordPage();
+      } else if (currentPage === 4) {
+        drawPaymentCompletePage();
+      }
+      
+      // 绘制底部导航提示
+      drawFooter();
+    }
+
+    function drawHeader() {
+      // 顶部装饰条
+      noStroke();
+      fill(255, 105, 180);
+      rect(0, 0, width, 10);
+      
+      // 页面标题
+      fill(255, 105, 180);
+      textSize(24);
+      textAlign(CENTER);
+      
+      let title = "";
+      if (currentPage === 1) title = "填写收货信息";
+      else if (currentPage === 2) title = "选择支付方式";
+      else if (currentPage === 3) title = "输入支付密码";
+      else if (currentPage === 4) title = "支付完成";
+      
+      text(title, width/2, 50);
+      
+      // 礼物图标
+      textSize(30);
+      text("🎁", width/2, 90);
+    }
+
+    function drawFooter() {
+      // 底部安全提示
+      fill(150);
+      textSize(12);
+      textAlign(CENTER);
+      text("安全支付 · 个人信息加密处理", width/2, height - 20);
+      
+      // 当前页面指示器
+      for (let i = 1; i <= 4; i++) {
+        fill(i === currentPage ? color(255, 105, 180) : color(200));
+        ellipse(width/2 - 30 + i * 20, height - 40, 10, 10);
+      }
+    }
+
+    // 显示指定页面
+    function showPage(pageNum) {
+      currentPage = pageNum;
+      resizeCanvas(400, 700);
+      redraw();
+    }
+
+    // 第一页: 收货信息
+    function drawShippingInfoPage() {
+      textAlign(LEFT);
+      
+      // 表单字段
+      drawTextField("收件人姓名", userInfo.name, 50, 150, "name");
+      drawTextField("手机号码", userInfo.phone, 50, 230, "phone");
+      drawTextField("收货地址", userInfo.address, 50, 310, "address");
+      
+      // 提交按钮
+      drawButton("确认收货信息", 50, height - 120, width - 100, 50, 
+                userInfo.name && userInfo.phone && userInfo.address);
+    }
+
+    function drawTextField(label, value, x, y, fieldName) {
+      // 标签
+      fill(80);
+      textSize(16);
+      text(label + ":", x, y - 10);
+      
+      // 输入框
+      stroke(currentField === fieldName ? color(255, 105, 180) : color(220));
+      strokeWeight(currentField === fieldName ? 2 : 1);
+      fill(255);
+      rect(x, y, width - 100, 50, 10);
+      
+      // 文本
+      fill(value ? 0 : 180);
+      noStroke();
+      text(value || "请输入" + label, x + 15, y + 30);
+    }
+
+    // 第二页: 支付方式
+    function drawPaymentMethodPage() {
+      // 金额显示
+      fill(255, 105, 180);
+      textSize(18);
+      textAlign(CENTER);
+      text(`支付金额: ¥${giftPrice.toFixed(2)}`, width/2, 120);
+      
+      // 支付方式列表
+      for (let i = 0; i < paymentMethods.length; i++) {
+        let y = 160 + i * 90;
+        let method = paymentMethods[i];
+        
+        // 卡片背景
+        fill(method.selected ? color(255, 230, 240) : 255);
+        stroke(method.selected ? color(255, 105, 180) : color(220));
+        strokeWeight(method.selected ? 2 : 1);
+        rect(50, y, width - 100, 70, 15);
+        
+        // 图标
+        textSize(28);
+        text(method.icon, 70, y + 40);
+        
+        // 支付方式名称
+        fill(60);
+        textSize(16);
+        textAlign(LEFT);
+        text(method.name, 110, y + 30);
+        
+        // 支付方式描述
+        fill(120);
+        textSize(12);
+        text(method.desc, 110, y + 50);
+        textAlign(CENTER);
+        
+        // 单选按钮
+        fill(method.selected ? color(255, 105, 180) : color(200));
+        noStroke();
+        ellipse(width - 70, y + 35, 24, 24);
+        
+        if (method.selected) {
+          fill(255);
+          ellipse(width - 70, y + 35, 10, 10);
+          selectedMethod = method.name;
+        }
+      }
+      
+      // 确认按钮
+      drawButton("确认支付", 50, height - 120, width - 100, 50, true);
+    }
+
+    // 第三页: 密码输入
+    function drawPasswordPage() {
+      if (!paymentSuccess) {
+        // 支付信息
+        fill(100);
+        textSize(16);
+        textAlign(CENTER);
+        text(`支付方式: ${selectedMethod}`, width/2, 140);
+        text(`金额: ¥${giftPrice.toFixed(2)}`, width/2, 170);
+        
+        // 密码输入框
+        fill(255);
+        stroke(200);
+        rect(50, 200, width - 100, 60, 15);
+        
+        // 密码圆点
+        for (let i = 0; i < 6; i++) {
+          fill(digits[i] ? color(255, 105, 180) : color(200));
+          noStroke();
+          ellipse(100 + i * 40, 230, 16, 16);
+        }
+        
+        // 键盘
+        drawNumpad();
+      } else {
+        // 支付处理中动画
+        fill(255, 105, 180);
+        textSize(16);
+        text("支付处理中...", width/2, height - 150);
+        
+        // 旋转动画
+        push();
+        translate(width/2, height/2);
+        rotate(frameCount * 0.1);
+        noFill();
+        stroke(255, 105, 180);
+        strokeWeight(3);
+        ellipse(0, 0, 50, 50);
+        pop();
+        
+        // 3秒后跳转到完成页面
+        if (frameCount - successStartFrame > 180) {
+          showPage(4);
+        }
+      }
+    }
+
+    function drawNumpad() {
+      let startY = 300;
+      let btnSize = 70;
+      let spacing = 10;
+      
+      for (let row = 0; row < 4; row++) {
+        for (let col = 0; col < 3; col++) {
+          let x = 50 + col * (btnSize + spacing);
+          let y = startY + row * (btnSize + spacing);
+          
+          // 跳过最后一行的第2个按钮(没有0)
+          if (row === 3 && col === 1) continue;
+          
+          // 检查鼠标悬停
+          let hover = mouseX > x && mouseX < x + btnSize && 
+                     mouseY > y && mouseY < y + btnSize;
+          
+          // 按钮背景
+          fill(hover ? color(245) : 255);
+          stroke(220);
+          rect(x, y, btnSize, btnSize, 10);
+          
+          // 按钮文本
+          fill(60);
+          textSize(24);
+          textAlign(CENTER);
+          if (row === 3 && col === 0) {
+            text("0", x + btnSize/2, y + btnSize/2 + 8);
+          } else if (row === 3 && col === 2) {
+            textSize(20);
+            text("⌫", x + btnSize/2, y + btnSize/2 + 8);
+          } else {
+            text(row * 3 + col + 1, x + btnSize/2, y + btnSize/2 + 8);
+          }
+        }
+      }
+    }
+
+    // 第四页: 支付完成
+    function drawPaymentCompletePage() {
+      // 完成图标
+      fill(76, 175, 80);
+      noStroke();
+      ellipse(width/2, 180, 100, 100);
+      fill(255);
+      textSize(60);
+      textAlign(CENTER);
+      text("✓", width/2, 200);
+      
+      // 完成文字
+      fill(255, 105, 180);
+      textSize(24);
+      text("支付成功!", width/2, 280);
+      
+      // 支付信息
+      fill(100);
+      textSize(16);
+      text(`支付方式: ${selectedMethod}`, width/2, 320);
+      text(`金额: ¥${giftPrice.toFixed(2)}`, width/2, 350);
+      text(`订单号: ${orderNumber}`, width/2, 380);
+      
+      // 礼物信息
+      fill(255, 105, 180);
+      textSize(20);
+      text("🎁 神秘礼物 🎁", width/2, 430);
+      fill(100);
+      textSize(14);
+      text("预计3-5个工作日内送达", width/2, 460);
+      
+      // 完成按钮
+      drawButton("完成", 150, height - 120, 100, 50, true);
+      
+      // 3秒后自动跳转到完成页面
+      if (frameCount - successStartFrame > 180) {
+        // 保存订单号
+        localStorage.setItem('orderNumber', orderNumber);
+        // 跳转到完成页面
+        window.location.href = "complete.html";
+      }
+    }
+
+    function drawButton(label, x, y, w, h, enabled) {
+      let hover = enabled && mouseX > x && mouseX < x + w && 
+                 mouseY > y && mouseY < y + h;
+      
+      fill(enabled ? (hover ? color(255, 85, 170) : color(255, 105, 180)) : color(200));
+      noStroke();
+      rect(x, y, w, h, 25);
+      
+      fill(255);
+      textSize(18);
+      textAlign(CENTER);
+      text(label, x + w/2, y + h/2 + 8);
+    }
+
+    function mousePressed() {
+      if (currentPage === 1) {
+        // 第一页逻辑 - 收货信息
+        if (mouseY > 150 && mouseY < 200) currentField = "name";
+        else if (mouseY > 230 && mouseY < 280) currentField = "phone";
+        else if (mouseY > 310 && mouseY < 360) currentField = "address";
+        else currentField = null;
+        
+        // 检查确认按钮点击
+        if (mouseX > 50 && mouseX < width - 50 && 
+            mouseY > height - 120 && mouseY < height - 70 &&
+            userInfo.name && userInfo.phone && userInfo.address) {
+          // 保存用户信息
+          localStorage.setItem('userName', userInfo.name);
+          showPage(2);
+        }
+      } 
+      else if (currentPage === 2) {
+        // 第二页逻辑 - 支付方式选择
+        for (let i = 0; i < paymentMethods.length; i++) {
+          let y = 160 + i * 90;
+          if (mouseX > 50 && mouseX < width - 50 && mouseY > y && mouseY < y + 70) {
+            paymentMethods.forEach(m => m.selected = false);
+            paymentMethods[i].selected = true;
+            selectedMethod = paymentMethods[i].name;
+            redraw();
+          }
+        }
+        
+        // 检查确认按钮点击
+        if (mouseX > 50 && mouseX < width - 50 && 
+            mouseY > height - 120 && mouseY < height - 70) {
+          showPage(3);
+        }
+      }
+      else if (currentPage === 3 && !paymentSuccess) {
+        // 第三页逻辑 - 密码输入
+        let startY = 300;
+        let btnSize = 70;
+        let spacing = 10;
+        
+        for (let row = 0; row < 4; row++) {
+          for (let col = 0; col < 3; col++) {
+            let x = 50 + col * (btnSize + spacing);
+            let y = startY + row * (btnSize + spacing);
+            
+            // 检查点击
+            if (mouseX > x && mouseX < x + btnSize && 
+                mouseY > y && mouseY < y + btnSize) {
+              
+              // 数字按钮
+              if (row < 3 || (row === 3 && col === 0)) {
+                if (password.length < 6) {
+                  let num = row === 3 && col === 0 ? "0" : str(row * 3 + col + 1);
+                  password += num;
+                  digits[password.length - 1] = num;
+                  
+                  // 模拟支付验证
+                  if (password.length === 6) {
+                    paymentSuccess = true;
+                    successStartFrame = frameCount;
+                    loop(); // 开始动画
+                  }
+                }
+              } 
+              // 退格按钮
+              else if (row === 3 && col === 2 && password.length > 0) {
+                password = password.slice(0, -1);
+                digits[password.length] = "";
+              }
+              redraw();
+            }
+          }
+        }
+      }
+      else if (currentPage === 4) {
+        // 第四页逻辑 - 完成按钮
+        if (mouseX > 150 && mouseX < 250 && 
+            mouseY > height - 120 && mouseY < height - 70) {
+          // 重置支付流程
+          resetPayment();
+          showPage(1);
+        }
+      }
+    }
+
+    function keyPressed() {
+      if (currentPage === 1 && currentField) {
+        if (keyCode === BACKSPACE) {
+          userInfo[currentField] = userInfo[currentField].slice(0, -1);
+        } else if (keyCode >= 32 && keyCode <= 126) { // 可打印字符
+          userInfo[currentField] += key;
+        }
+        redraw();
+      }
+    }
+
+    function resetPayment() {
+      password = "";
+      digits = ["", "", "", "", "", ""];
+      paymentSuccess = false;
+      currentField = null;
+    }
+  </script>
+</body>
+</html>
