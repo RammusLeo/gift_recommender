@@ -42,7 +42,7 @@ node server.js
 
 5. 在浏览器中访问：
 ```
-http://localhost:8000/ask_gift.html
+http://localhost:8000/
 ```
 
 ## 使用流程
