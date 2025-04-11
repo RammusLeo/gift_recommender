@@ -234,12 +234,20 @@ async function refreshGifts() {
   loading = true;
   
   try {
-    // 从 localStorage 获取原始预算和描述
+    // 从 localStorage 获取原始预算、描述和之前的礼物选项
     const budget = localStorage.getItem('giftBudget');
     const description = localStorage.getItem('giftDescription');
+    const previousGifts = localStorage.getItem('giftOptions');
     
     if (!budget || !description) {
       throw new Error('找不到原始需求信息');
+    }
+
+    // 解析之前的礼物选项
+    let previousGiftsText = '';
+    if (previousGifts) {
+      const gifts = JSON.parse(previousGifts);
+      previousGiftsText = gifts.map(gift => gift.text).join('\n');
     }
 
     // 调用 DeepSeek API 获取新的推荐
@@ -256,7 +264,7 @@ async function refreshGifts() {
           },
           {
             role: "user",
-            content: `预算：${budget}元\n需求：${description}\n\n请推荐3个与之前不同的礼物选项。`
+            content: `预算：${budget}元\n需求：${description}\n\n之前推荐过的礼物：\n${previousGiftsText}\n\n请推荐3个与以上完全不同的礼物选项。`
           }
         ],
         temperature: 0.7,
